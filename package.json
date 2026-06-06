@@ -1,0 +1,16 @@
+{
+  "name": "yeelight-cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lightweight Node.js CLI for controlling Yeelight bulbs over LAN",
+  "bin": {
+    "yeelight": "./src/cli.js"
+  },
+  "scripts": {
+    "start": "node src/cli.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
