@@ -1,28 +1,34 @@
-const fs = require("node:fs/promises");
-const os = require("node:os");
-const path = require("node:path");
-const { DEFAULT_CACHE_TTL_MS } = require("./protocol");
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { DEFAULT_CACHE_TTL_MS } from "./library/protocol";
+import type { YeelightDiscoveredDevice } from "./library/types";
 
 const CACHE_PATH = path.join(os.homedir(), ".yeelight-cli-cache.json");
 
-async function readDiscoveryCache(options = {}) {
+interface DiscoveryCacheFile {
+  cachedAt: number;
+  devices: YeelightDiscoveredDevice[];
+}
+
+export async function readDiscoveryCache(options: { ttlMs?: number } = {}): Promise<YeelightDiscoveredDevice[] | null> {
   const ttlMs = options.ttlMs ?? DEFAULT_CACHE_TTL_MS;
-  let raw;
+  let raw: string;
 
   try {
     raw = await fs.readFile(CACHE_PATH, "utf8");
   } catch (error) {
-    if (error && error.code === "ENOENT") {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return null;
     }
 
     throw error;
   }
 
-  let parsed;
+  let parsed: DiscoveryCacheFile;
   try {
-    parsed = JSON.parse(raw);
-  } catch (error) {
+    parsed = JSON.parse(raw) as DiscoveryCacheFile;
+  } catch {
     throw new Error(`Discovery cache at ${CACHE_PATH} is not valid JSON.`);
   }
 
@@ -37,7 +43,7 @@ async function readDiscoveryCache(options = {}) {
   return parsed.devices;
 }
 
-async function writeDiscoveryCache(devices) {
+export async function writeDiscoveryCache(devices: readonly YeelightDiscoveredDevice[]): Promise<void> {
   const payload = JSON.stringify(
     {
       cachedAt: Date.now(),
@@ -50,12 +56,6 @@ async function writeDiscoveryCache(devices) {
   await fs.writeFile(CACHE_PATH, payload, "utf8");
 }
 
-function getCachePath() {
+export function getCachePath(): string {
   return CACHE_PATH;
 }
-
-module.exports = {
-  getCachePath,
-  readDiscoveryCache,
-  writeDiscoveryCache
-};
