@@ -1,0 +1,5 @@
+/yeelight-cli-go
+*.exe
+*.exe~
+*.test
+*.out
