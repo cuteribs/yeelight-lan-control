@@ -1,0 +1,83 @@
+name: Release Go CLI
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-binaries:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: golang
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: darwin
+            goarch: amd64
+          - goos: windows
+            goarch: amd64
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: golang/go.mod
+
+      - name: Run tests
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        run: go test ./...
+
+      - name: Build release archive
+        id: build
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          archive_base="yeelight-${version}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          binary_name="yeelight"
+
+          if [[ "${{ matrix.goos }}" == "windows" ]]; then
+            binary_name="${binary_name}.exe"
+          fi
+
+          mkdir -p dist
+          GOOS="${{ matrix.goos }}" GOARCH="${{ matrix.goarch }}" CGO_ENABLED=0 go build -o "dist/${binary_name}" .
+          tar -czf "dist/${archive_base}.tar.gz" -C dist "$binary_name"
+
+          echo "archive_name=${archive_base}.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: golang/dist/${{ steps.build.outputs.archive_name }}
+
+  create-release:
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release archives
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum ./* > sha256sums.txt
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

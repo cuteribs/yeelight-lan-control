@@ -1,0 +1,74 @@
+name: Release Rust Package
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  publish-and-release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: rust
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify tag matches crate version
+        run: |
+          crate_name="$(sed -n 's/^name = "\(.*\)"$/\1/p' Cargo.toml | head -n1)"
+          crate_version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n1)"
+          tag_version="${GITHUB_REF_NAME#v}"
+
+          if [[ "$crate_version" != "$tag_version" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match rust/Cargo.toml version $crate_version"
+            exit 1
+          fi
+
+          if [[ -z "$crate_name" || -z "$crate_version" ]]; then
+            echo "Unable to determine crate metadata from rust/Cargo.toml"
+            exit 1
+          fi
+
+      - name: Run tests
+        run: cargo test --all-targets
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Package crate artifacts
+        id: package
+        run: |
+          crate_name="$(sed -n 's/^name = "\(.*\)"$/\1/p' Cargo.toml | head -n1)"
+          crate_version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n1)"
+
+          cargo package
+
+          crate_file="target/package/${crate_name}-${crate_version}.crate"
+          binary_file="target/package/yeelight-${crate_version}-x86_64-unknown-linux-gnu"
+          cp target/release/yeelight "$binary_file"
+          chmod +x "$binary_file"
+
+          echo "crate_file=$crate_file" >> "$GITHUB_OUTPUT"
+          echo "binary_file=$binary_file" >> "$GITHUB_OUTPUT"
+
+      - name: Publish crate to crates.io
+        run: cargo publish --token "$CARGO_REGISTRY_TOKEN"
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            rust/${{ steps.package.outputs.crate_file }}
+            rust/${{ steps.package.outputs.binary_file }}
+          generate_release_notes: true

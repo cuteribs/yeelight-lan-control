@@ -1,7 +1,7 @@
 {
   "name": "yeelight-cli",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "description": "Bun-first TypeScript CLI and library for controlling Yeelight bulbs over LAN",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
